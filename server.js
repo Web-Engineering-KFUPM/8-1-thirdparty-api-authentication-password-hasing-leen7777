@@ -245,14 +245,44 @@ app.get("/", (_req, res) => {
 // =========================
 app.post("/register", async (req, res) => {
   // Implement logic here based on the TODO 1.
-});
+ try {
+      const { email, password } = req.body || {};
+      if (!email || !password)
+        return res.status(400).json({ error: "Email and password are required"
+  });
+      const existing = users.find((u) => u.email === email);
+      if (existing)
+        return res.status(400).json({ error: "User already exists" });
+      const hash = await bcrypt.hash(password, 10);
+      users.push({ email, passwordHash: hash });
+      return res.status(201).json({ message: "User registered!" });
+    } catch (err) {
+      console.error("Register error:", err);
+      return res.status(500).json({ error: "Server error during register" });
+    }});
 
 // =========================
 // POST /login
 // =========================
 app.post("/login", async (req, res) => {
   // Implement logic here based on the TODO 2.
-});
+    try {
+      const { email, password } = req.body || {};
+      if (!email || !password)
+        return res.status(400).json({ error: "Email and password are required"
+  });
+      const user = users.find((u) => u.email === email);
+      if (!user)
+        return res.status(400).json({ error: "User not found" });
+      const match = await bcrypt.compare(password, user.passwordHash);
+      if (!match)
+        return res.status(400).json({ error: "Wrong password" });
+      const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: "1h" });
+      return res.json({ token });
+    } catch (err) {
+      console.error("Login error:", err);
+      return res.status(500).json({ error: "Server error during login" });
+    }});
 
 // =========================
 // Protected Weather API
@@ -260,7 +290,35 @@ app.post("/login", async (req, res) => {
 // =========================
 app.get("/weather", async (req, res) => {
   // Implement logic here based on the TODO 3.
-});
+try {
+      const auth = req.headers.authorization;
+      if (!auth)
+        return res.status(401).json({ error: "Missing token" });
+      const token = auth.split(" ")[1];
+      try {
+        jwt.verify(token, JWT_SECRET);
+      } catch {
+        return res.status(401).json({ error: "Invalid token" });
+      }
+      const city = req.query.city;
+      if (!city)
+        return res.status(400).json({ error: "City required" });
+      const url = `https://wttr.in/${encodeURIComponent(city)}?format=j1`;
+      const weatherResponse = await fetch(url);
+      if (!weatherResponse.ok)
+        return res.status(500).json({ error: "Error from weather API" });
+      const data = await weatherResponse.json();
+      return res.json({
+        city,
+        temp: data.temperature,
+        description: data.description,
+        wind: data.wind,
+        raw: data
+      });
+    } catch (err) {
+      return res.status(500).json({ error: "Server error during weather fetch"
+  });
+    }});
 
 // Start server
 app.listen(PORT, () =>
